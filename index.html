@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bambino × Virtuoso</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#09090c" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Bambino" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+</head>
+<body style="margin:0;padding:0;">
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useEffect } = React;
+
+// ─── Themes ───────────────────────────────────────────────────────────────────
+// JUNO: warm cream + golden amber + dark toe beans — from the dog's coat & paws
+// GIGI: deep black + bright white + pink toe beans — from the tuxedo cat
+
+const THEMES = {
+  juno: {
+    name: "Juno",
+    subtitle: "☀️ Light Mode",
+    bg:         "#f5f0e8",
+    surface:    "#fffcf8",
+    border:     "#e8ddd0",
+    border2:    "#d4c4b0",
+    primary:    "#b8720a",       // warm amber — Juno's golden coat
+    primaryGlow:"#b8720a14",
+    primaryBright:"#d48820",
+    blue:       "#7a4820",       // deep caramel — diagnose
+    blueBright: "#9a6030",
+    blueGlow:   "#7a482014",
+    purple:     "#8a4838",       // terracotta — clean
+    purpleGlow: "#8a483814",
+    dim:        "#c8b89a",
+    muted:      "#9a8870",
+    text:       "#1a0e04",
+    textDim:    "#7a6040",
+    textMid:    "#4a3020",
+    mono:       "'DM Mono', monospace",
+    tag:        "warm",
+  },
+  gigi: {
+    name: "Gigi",
+    subtitle: "🌙 Dark Mode",
+    bg:         "#09090c",       // deep black — Gigi's fur
+    surface:    "#0e0e14",
+    border:     "#17171f",
+    border2:    "#20202c",
+    primary:    "#f0edf8",       // bright white — Gigi's chest & paws
+    primaryGlow:"#f0edf812",
+    primaryBright:"#ffffff",
+    blue:       "#d4608a",       // toe bean pink!
+    blueBright: "#f080aa",
+    blueGlow:   "#d4608a14",
+    purple:     "#a878f0",       // soft lilac
+    purpleGlow: "#a878f014",
+    dim:        "#28283a",
+    muted:      "#38384e",
+    text:       "#f0edf8",
+    textDim:    "#404058",
+    textMid:    "#8080a8",
+    mono:       "'DM Mono', monospace",
+    tag:        "dark",
+  },
+};
+
+// ─── Data ─────────────────────────────────────────────────────────────────────
+
+const BASKET_TYPES = {
+  dual: {
+    id: "dual", name: "Dual Wall", aka: "Pressurized",
+    grindRange: "10–14", startSetting: 12,
+    dose: 18, yield: 36, time: 25,
+    tip: "Creates artificial pressure — more forgiving of grind inconsistency. Good starting point. You'll get crema even with a slightly off grind.",
+    warnings: ["Finer than 10 = choking the machine", "If always at 14 and still fast, move to single wall"],
+  },
+  single: {
+    id: "single", name: "Single Wall", aka: "Non-Pressurized",
+    grindRange: "6–9", startSetting: 8,
+    dose: 18, yield: 36, time: 30,
+    tip: "Exposes everything — your grind, distribution, tamp. More demanding, better results. Flick WDT matters most here.",
+    warnings: ["Must build 9-bar resistance or shot blondes instantly", "First drip at 7–9s = good grind"],
+  },
+};
+
+const WORKFLOW = [
+  { id: "heat",  icon: "♨",  title: "Flush group head",  detail: "ThermoJet heats in 3s but the group head retains cold stale water. Run a 2–3 second blank before locking in. Every shot, every time.", tip: "Skipping this is the single most common reason for an off first shot." },
+  { id: "dose",  icon: "⚖",  title: "Weigh & load",      detail: "Single-dose 18g into the Virtuoso+ hopper. Don't store beans there — grind what you need. Virtuoso+ retains ~0.8g between grinds.", tip: "54mm basket sweet spot: 17–20g. Under 17g = thin puck collapse." },
+  { id: "grind", icon: "⚙",  title: "Grind",              detail: "Set your Virtuoso+ to target setting. Use the digital timer once dialed in — precise to 0.1s.", tip: "Always change grind setting while grinder is running — never when stopped." },
+  { id: "flick", icon: "🪄", title: "Flick WDT",          detail: "Click to deploy needles. Stir in overlapping circles + radial strokes for 15–20 seconds. Break every clump. Don't press needles to basket floor. Flick wrist to retract.", tip: "20s max. Fine migration causes uneven extraction in a shallow 54mm bed." },
+  { id: "tamp",  icon: "⬇",  title: "Tamp",               detail: "Elbow directly above portafilter, wrist neutral. Press straight down until the Normcore spring engages. Feel and hear it. Stop there.", tip: "No twist, no rock. Spring click = done." },
+  { id: "pull",  icon: "☕", title: "Lock & pull",         detail: "Lock in. Start timer as you press shot button. Bambino pre-infuses automatically before 9 bar. Target: first drip 7–9 seconds from pump start.", tip: "Hold shot button while pulling to reprogram the yield — saves on release." },
+  { id: "taste", icon: "✍",  title: "Taste & log",         detail: "One variable at a time. Virtuoso+ has macro-only steps — each click is a meaningful change. Pull, taste, decide.", tip: "Once dialed, the Virtuoso+ is very repeatable. Protect your setting." },
+];
+
+const TASTE_OPTIONS = [
+  { value: -2, label: "Very Sour",   emoji: "🍋", color: "#e8b800" },
+  { value: -1, label: "Sour",        emoji: "😬", color: "#b89820" },
+  { value:  0, label: "Balanced",    emoji: "✨", color: null },
+  { value:  1, label: "Bitter",      emoji: "😕", color: "#d06020" },
+  { value:  2, label: "Very Bitter", emoji: "☕", color: "#c03020" },
+];
+
+const ADJUSTMENT_TIPS = {
+  "-2": "Go 2 settings finer on the Virtuoso+. Also check your dose — under 17g causes thin-bed sourness on a 54mm. Was the Flick WDT thorough?",
+  "-1": "Go 1 setting finer. On single wall: a lopsided tamp creates a partial channel that reads as sour — keep elbow directly above the basket.",
+  "0":  "Locked in. Note the Virtuoso+ setting — it's very repeatable. Reprogram your volumetric button to save this yield.",
+  "1":  "Go 1 setting coarser. Check shot time: if it ran past 38s that's over-extraction regardless of grind.",
+  "2":  "Go 2 settings coarser. If on single wall, try dual wall first to verify your baseline, then return.",
+};
+
+const PUCK_SYMPTOMS = [
+  {
+    id: "soggy_center", label: "Soggy / wet center", emoji: "💧", category: "puck",
+    causes: ["Grind too coarse — water passed without resistance", "Under-dosed below 17g — thin puck collapsed under 9 bar", "No group flush — cold water saturated puck before extraction"],
+    fixes: [
+      { tool: "Virtuoso+", action: "Go 2 settings finer. Wet center = water racing through the middle." },
+      { tool: "Dose", action: "Confirm 18g. A thin puck in the 54mm basket collapses under 9 bar." },
+      { tool: "Bambino", action: "Always run a 2–3 second blank before locking in. Cold group head water soaks the puck before extraction starts." },
+    ],
+  },
+  {
+    id: "soggy_all", label: "Whole puck wet & sloppy", emoji: "🌊", category: "puck",
+    causes: ["Shot too short — moisture stayed in puck", "Grind very coarse — water passed instantly", "Overfilled basket — no headspace, puck against shower screen"],
+    fixes: [
+      { tool: "Yield", action: "Increase yield 3–5g. Completely wet puck often means stopped too early." },
+      { tool: "Virtuoso+", action: "Go finer by 2 settings. Totally wet puck is almost always a grind issue." },
+      { tool: "Dose", action: "Keep to 17–20g max. Over 20g in a 54mm basket leaves no headspace." },
+    ],
+  },
+  {
+    id: "dry_cracked", label: "Dry, cracked puck", emoji: "🏜️", category: "puck",
+    causes: ["Grind too fine — over-extracted, all moisture pulled through", "Shot ran too long — extended contact dried the bed"],
+    fixes: [
+      { tool: "Virtuoso+", action: "Go 1–2 settings coarser. Dry cracked puck = over-extraction." },
+      { tool: "Time/Yield", action: "Reduce yield 3–4g. Shot past 38s = over-extracted." },
+    ],
+  },
+  {
+    id: "sticks_screen", label: "Puck sticks to shower screen", emoji: "🪣", category: "puck",
+    causes: ["Overdosed — puck pressed against shower screen during extraction", "Under 2mm headspace after tamping"],
+    fixes: [
+      { tool: "Dose", action: "Reduce by 0.5–1g. Target: 2–3mm between tamped surface and basket rim." },
+      { tool: "Normcore Tamper", action: "The spring is working correctly — this is purely a dose issue." },
+    ],
+  },
+];
+
+const SPRAY_SYMPTOMS = [
+  {
+    id: "spray_wild", label: "Wild spray / multiple jets", emoji: "💥", category: "spray",
+    causes: ["Severe channeling — water found multiple weak paths", "Flick WDT not thorough — dry clumps left void channels", "Tilted tamp — uneven density"],
+    fixes: [
+      { tool: "Subminimal Flick", action: "Stir 20 full seconds in overlapping circles + radial strokes. The 54mm bed is shallow — any clump creates a proportionally large void." },
+      { tool: "Normcore Tamper", action: "Elbow directly above. Spring click = done. Any tilt creates uneven density." },
+      { tool: "Virtuoso+", action: "If WDT is thorough, go 1 click finer to increase puck density." },
+    ],
+  },
+  {
+    id: "spray_edge", label: "Spray from basket edge", emoji: "🌀", category: "spray",
+    causes: ["Gap between puck and 54mm basket wall", "Flick needles not reaching wall", "Tamper slightly small for basket"],
+    fixes: [
+      { tool: "Subminimal Flick", action: "Make sure strokes reach all the way to the basket wall. Edge voids are more impactful in 54mm than 58mm." },
+      { tool: "Virtuoso+", action: "Go 1 click finer — finer grind swells slightly and seals gaps at the wall." },
+      { tool: "Stock portafilter", action: "Confirm tamper diameter is exactly 54mm. The stock Bambino set should match." },
+    ],
+  },
+  {
+    id: "spray_lopsided", label: "Lopsided / one-sided flow", emoji: "↗️", category: "spray",
+    causes: ["Tilted tamp — most common cause", "Uneven distribution before tamping"],
+    fixes: [
+      { tool: "Normcore Tamper", action: "Elbow up, directly above. Wrist neutral. Press straight down. Spring click = done." },
+      { tool: "Subminimal Flick", action: "Check the bed looks flat and level before tamping. If visibly uneven, stir a bit longer." },
+    ],
+  },
+  {
+    id: "spray_midshot", label: "Good start, sudden spray mid-shot", emoji: "⚡", category: "spray",
+    causes: ["Channel opened mid-shot — weak point collapsed under sustained 9 bar", "Fine migration blocked paths, forcing water to reroute"],
+    fixes: [
+      { tool: "Virtuoso+", action: "Go 1 setting finer to increase density and resist mid-shot collapse." },
+      { tool: "Subminimal Flick", action: "A mid-shot channel traces back to a prep flaw. More thorough WDT prevents the weak starting point." },
+      { tool: "Normcore Tamper", action: "Confirm you're reaching the spring click — under-tamped puck is most vulnerable." },
+    ],
+  },
+  {
+    id: "spray_fast", label: "Shot runs fast + sprays", emoji: "🏃", category: "spray",
+    causes: ["Grind too coarse — low resistance, water blasts through", "Under-dosed — thin puck collapses"],
+    fixes: [
+      { tool: "Virtuoso+", action: "Go finer by 2–3 settings. Fast + spray = grind problem. Target first drip at 7–9s." },
+      { tool: "Dose", action: "Confirm 18g. A thin puck under 9 bar has nothing to slow the water." },
+      { tool: "Basket", action: "If on dual wall: it masks this. Switch to single wall to diagnose accurately." },
+    ],
+  },
+];
+
+const ALL_SYMPTOMS = [...PUCK_SYMPTOMS, ...SPRAY_SYMPTOMS];
+
+const CLEAN_SCHEDULES = [
+  {
+    id: "daily", freq: "Daily",
+    steps: [
+      { title: "Purge steam wand", detail: "Purge immediately after steaming every time. Wipe with damp cloth while still hot. Milk that dries on the wand clogs the tip and is a hygiene issue." },
+      { title: "Wipe group head", detail: "Run a 2-second blank after your last shot to flush the shower screen. Wipe portafilter seal and basket rim with a dry cloth." },
+      { title: "Empty drip tray", detail: "The Bambino's tray fills fast. Empty and rinse daily to prevent mould and overflow." },
+    ],
+  },
+  {
+    id: "weekly", freq: "Weekly",
+    steps: [
+      { title: "Blind basket backflush — water only", detail: "Insert solid blind basket (no hole) into portafilter. Lock in. Press 1-shot for 5-second bursts, 5–6 times. Forces water back through the group valve, clears coffee oils." },
+      { title: "Puly Caff backflush", detail: "Add ½ tsp Puly Caff powder to blind basket. Run 5–6 burst cycles. Then run 4–5 clean water cycles to fully rinse. The group head seal lasts much longer with this routine." },
+      { title: "Portafilter & basket soak", detail: "Remove basket from portafilter. Soak both in warm water with a pinch of Puly Caff for 10–15 min. Scrub with soft brush. Rinse thoroughly. Dry before use." },
+      { title: "Grinder brush", detail: "Brush the Virtuoso+ chute with the included brush. Remove the hopper and brush the burrs lightly. Do not wash the ring burr in water — it will rust." },
+    ],
+  },
+  {
+    id: "monthly", freq: "Monthly",
+    steps: [
+      { title: "Deep portafilter soak", detail: "Soak portafilter, basket, and shower screen in Puly Caff solution for 30 min. Use a group head brush on the shower screen gasket. Rinse completely — twice." },
+      { title: "Steam wand deep clean", detail: "Submerge wand tip in warm water + milk cleaner for 10 min. Unscrew tip if possible and soak separately. Purge several times after reassembly." },
+      { title: "Descale check", detail: "Breville recommends every 2–3 months depending on water hardness. The machine will alert with a flashing light. Use Breville descaler or food-grade citric acid (1 tsp/litre). Follow the full machine cycle." },
+      { title: "Burr inspection", detail: "Remove hopper and ring burr. Brush thoroughly. If burrs look shiny/glazed they may need replacing — typically after 200–300kg of beans." },
+    ],
+  },
+];
+
+const CLEAN_TIPS = [
+  "Never use dish soap on the portafilter basket — residue kills crema for several shots.",
+  "Puly Caff is not optional. Water alone won't remove coffee oils. Rancid oils = bitter, flat shots.",
+  "The stock Bambino blind basket may have a small hole. Get a solid rubber disc insert for proper backflushing — a holed basket won't build pressure.",
+  "Rinse everything twice after Puly Caff. Any residue makes your next shot taste of cleaning chemicals.",
+  "Descale with machine cold and empty. Follow Breville's cycle precisely — stopping mid-cycle damages the pump.",
+];
+
+// ─── Freshness helpers ────────────────────────────────────────────────────────
+
+function daysSince(dateStr) {
+  if (!dateStr) return null;
+  const diff = (new Date() - new Date(dateStr)) / (1000 * 60 * 60 * 24);
+  return Math.floor(diff);
+}
+
+function freshnessLabel(roastDate, openedDate) {
+  const daysRoasted = daysSince(roastDate);
+  const daysOpened = daysSince(openedDate);
+  if (daysRoasted === null) return null;
+  if (daysRoasted < 4) return { label: "Too fresh — rest 4+ days post-roast", level: "warn" };
+  if (daysRoasted <= 21) return { label: "Peak window", level: "good" };
+  if (daysRoasted <= 42) return { label: "Acceptable", level: "ok" };
+  return { label: "Past prime — consider new bag", level: "old" };
+}
+
+// ─── Sub-panels ───────────────────────────────────────────────────────────────
+
+function DiagnosePanel({ C }) {
+  const [category, setCategory] = useState("all");
+  const [selected, setSelected] = useState(null);
+  const filtered = ALL_SYMPTOMS.filter(s => category === "all" || s.category === category);
+  const active = selected ? ALL_SYMPTOMS.find(s => s.id === selected) : null;
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {[["all","All"],["puck","💧 Soggy Puck"],["spray","💥 Spray"]].map(([v, l]) => (
+          <button key={v} onClick={() => { setCategory(v); setSelected(null); }} style={{
+            padding: "7px 16px", borderRadius: 6,
+            background: category === v ? C.blue + "22" : "transparent",
+            border: `1px solid ${category === v ? C.blueBright : C.border2}`,
+            color: category === v ? C.blueBright : C.muted,
+            fontFamily: C.mono, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer",
+          }}>{l}</button>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: active ? 20 : 0 }}>
+        {filtered.map(s => (
+          <button key={s.id} onClick={() => setSelected(selected === s.id ? null : s.id)} style={{
+            background: selected === s.id ? C.border2 : C.surface,
+            border: `1px solid ${selected === s.id ? C.blueBright : C.border}`,
+            borderRadius: 10, padding: "14px 16px",
+            display: "flex", alignItems: "center", gap: 12, textAlign: "left", cursor: "pointer",
+          }}>
+            <span style={{ fontSize: 20 }}>{s.emoji}</span>
+            <div>
+              <div style={{ fontFamily: C.mono, fontSize: 11, color: selected === s.id ? C.blueBright : C.text, fontWeight: 500 }}>{s.label}</div>
+              <div style={{ fontFamily: C.mono, fontSize: 9, color: C.textDim, marginTop: 2, textTransform: "uppercase", letterSpacing: "0.08em" }}>{s.category}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {active && (
+        <div style={{ background: C.surface, border: `1px solid ${C.blueBright}`, borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 12, alignItems: "center" }}>
+            <span style={{ fontSize: 26 }}>{active.emoji}</span>
+            <div>
+              <div style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 500, color: C.text }}>{active.label}</div>
+              <div style={{ fontFamily: C.mono, fontSize: 9, color: C.blueBright, marginTop: 2, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                {active.causes.length} causes · {active.fixes.length} fixes
+              </div>
+            </div>
+          </div>
+          <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ fontFamily: C.mono, fontSize: 9, color: C.muted, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 10 }}>Why it's happening</div>
+            {active.causes.map((c, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, marginBottom: 7, alignItems: "flex-start" }}>
+                <div style={{ width: 18, height: 18, borderRadius: "50%", background: C.border2, color: C.muted, fontFamily: C.mono, fontSize: 9, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>{i+1}</div>
+                <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textMid, lineHeight: 1.7 }}>{c}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding: "16px 20px" }}>
+            <div style={{ fontFamily: C.mono, fontSize: 9, color: C.muted, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 10 }}>Fix it — with your gear</div>
+            {active.fixes.map((fix, i) => (
+              <div key={i} style={{ background: C.bg, borderRadius: 8, padding: 13, marginBottom: 8, borderLeft: `3px solid ${C.blue}` }}>
+                <div style={{ fontFamily: C.mono, fontSize: 9, color: C.blueBright, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>{fix.tool}</div>
+                <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textMid, lineHeight: 1.7 }}>{fix.action}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!active && (
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, marginTop: 8 }}>
+          <div style={{ fontFamily: C.mono, fontSize: 11, fontWeight: 500, color: C.primary, marginBottom: 12 }}>Golden Rules — 54mm Bambino</div>
+          {[
+            ["Flush first, always", "Run a 2-second blank before every shot. The group head doesn't heat at ThermoJet speed — cold water will wreck your puck before extraction starts."],
+            ["Basket is your first variable", "Single wall for quality, dual wall while learning. Don't diagnose grind problems on dual wall — it masks everything."],
+            ["54mm bed is shallow", "Clumps have proportionally more impact. The Flick WDT is the most important prep step on this machine."],
+            ["First drip timing", "7–9 seconds from pump start. Before 5s = too coarse. After 12s = too fine."],
+            ["One Virtuoso+ click at a time", "No micro ring. Each click is a real, meaningful change."],
+          ].map(([t, b]) => (
+            <div key={t} style={{ borderBottom: `1px solid ${C.border}`, paddingBottom: 10, marginBottom: 10 }}>
+              <div style={{ fontFamily: C.mono, fontSize: 11, color: C.text, marginBottom: 3 }}>{t}</div>
+              <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textDim, lineHeight: 1.7 }}>{b}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CleaningPanel({ C }) {
+  const [activeSchedule, setActiveSchedule] = useState("daily");
+  const [done, setDone] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("bambino_clean_done") || "{}"); } catch { return {}; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("bambino_clean_done", JSON.stringify(done)); } catch {}
+  }, [done]);
+  const schedule = CLEAN_SCHEDULES.find(s => s.id === activeSchedule);
+  const completedCount = schedule.steps.filter((_, i) => done[`${activeSchedule}-${i}`]).length;
+  const scheduleColor = { daily: C.primary, weekly: C.blue, monthly: C.purple };
+  const sc = scheduleColor[activeSchedule];
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 22 }}>
+        {CLEAN_SCHEDULES.map(s => {
+          const col = scheduleColor[s.id];
+          return (
+            <button key={s.id} onClick={() => setActiveSchedule(s.id)} style={{
+              padding: "8px 18px", borderRadius: 6,
+              background: activeSchedule === s.id ? col + "18" : "transparent",
+              border: `1px solid ${activeSchedule === s.id ? col : C.border2}`,
+              color: activeSchedule === s.id ? col : C.muted,
+              fontFamily: C.mono, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer",
+            }}>{s.freq}</button>
+          );
+        })}
+      </div>
+
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ flex: 1, height: 4, background: C.border2, borderRadius: 2, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${(completedCount / schedule.steps.length) * 100}%`, background: sc, borderRadius: 2, transition: "width 0.3s" }} />
+        </div>
+        <div style={{ fontFamily: C.mono, fontSize: 11, color: sc, whiteSpace: "nowrap" }}>{completedCount} / {schedule.steps.length}</div>
+        <button onClick={() => setDone(d => { const n = {...d}; schedule.steps.forEach((_, i) => delete n[`${activeSchedule}-${i}`]); return n; })} style={{ background: "none", border: "none", color: C.textDim, fontFamily: C.mono, fontSize: 9, cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}>RESET</button>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+        {schedule.steps.map((step, i) => {
+          const key = `${activeSchedule}-${i}`;
+          const isDone = done[key];
+          return (
+            <div key={i} onClick={() => setDone(d => ({ ...d, [key]: !d[key] }))} style={{
+              background: C.surface, border: `1px solid ${isDone ? sc + "55" : C.border}`,
+              borderRadius: 10, padding: "15px 17px",
+              display: "flex", gap: 13, alignItems: "flex-start", cursor: "pointer",
+              opacity: isDone ? 0.5 : 1, transition: "opacity 0.2s",
+            }}>
+              <div style={{
+                width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+                background: isDone ? sc : "transparent",
+                border: `2px solid ${isDone ? sc : C.border2}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: isDone ? C.bg : C.muted, fontFamily: C.mono, fontSize: isDone ? 13 : 10, fontWeight: 500,
+              }}>{isDone ? "✓" : i + 1}</div>
+              <div>
+                <div style={{ fontFamily: C.mono, fontSize: 12, fontWeight: 500, color: isDone ? C.muted : C.text, marginBottom: 5 }}>{step.title}</div>
+                <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textDim, lineHeight: 1.8 }}>{step.detail}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {activeSchedule === "weekly" && (
+        <div style={{ background: C.blueGlow, border: `1px solid ${C.blueBright}`, borderRadius: 10, padding: 17, marginBottom: 14 }}>
+          <div style={{ fontFamily: C.mono, fontSize: 9, color: C.blueBright, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 12 }}>Puly Caff Backflush — Step by Step</div>
+          {[
+            "Insert solid blind basket (no hole) into portafilter",
+            "Add ½ tsp Puly Caff powder to basket",
+            "Lock portafilter into group head",
+            "Press 1-shot: 5s on, release — repeat 5–6 times",
+            "Remove portafilter, discard residue",
+            "Re-lock with clean blind basket, no powder",
+            "Repeat 4–5 flush cycles with plain water only",
+            "Water should run clear, no chemical smell",
+          ].map((t, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, marginBottom: 5, alignItems: "flex-start" }}>
+              <div style={{ fontFamily: C.mono, fontSize: 9, color: C.blueBright, width: 16, flexShrink: 0 }}>{i+1}.</div>
+              <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textMid, lineHeight: 1.6 }}>{t}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 17 }}>
+        <div style={{ fontFamily: C.mono, fontSize: 9, color: C.muted, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 11 }}>Watch Out For</div>
+        {CLEAN_TIPS.map((tip, i) => (
+          <div key={i} style={{ display: "flex", gap: 9, marginBottom: 7, alignItems: "flex-start" }}>
+            <div style={{ color: C.primary, fontSize: 10, flexShrink: 0, marginTop: 1 }}>→</div>
+            <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textDim, lineHeight: 1.7 }}>{tip}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BeansPanel({ C }) {
+  const [bags, setBags] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("bambino_bags") || "[]"); } catch { return []; }
+  });
+  const [form, setForm] = useState({ name: "", roaster: "", roastDate: "", openedDate: "", grindSetting: "", notes: "" });
+  const [adding, setAdding] = useState(false);
+  useEffect(() => {
+    try { localStorage.setItem("bambino_bags", JSON.stringify(bags)); } catch {}
+  }, [bags]);
+
+  const freshnessColors = {
+    good: C.primary,
+    ok: C.blue,
+    warn: "#e8b800",
+    old: C.muted,
+  };
+
+  const handleAdd = () => {
+    if (!form.name.trim()) return;
+    setBags(p => [{ ...form, id: Date.now() }, ...p]);
+    setForm({ name: "", roaster: "", roastDate: "", openedDate: "", grindSetting: "", notes: "" });
+    setAdding(false);
+  };
+
+  const inputStyle = {
+    background: C.bg, border: `1px solid ${C.border2}`, borderRadius: 7,
+    padding: "10px 13px", fontFamily: C.mono, fontSize: 12,
+    color: C.text, outline: "none", width: "100%",
+  };
+  const labelStyle = { fontFamily: C.mono, fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 5, display: "block" };
+
+  return (
+    <div>
+      {/* Add bag button / form */}
+      {!adding ? (
+        <button onClick={() => setAdding(true)} style={{
+          width: "100%", padding: 14, borderRadius: 10, marginBottom: 20,
+          background: "transparent", border: `1px dashed ${C.border2}`,
+          color: C.muted, fontFamily: C.mono, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase",
+          cursor: "pointer",
+        }}>+ Log a Bag of Beans</button>
+      ) : (
+        <div style={{ background: C.surface, border: `1px solid ${C.primary}`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
+          <div style={{ fontFamily: C.mono, fontSize: 12, fontWeight: 500, color: C.primary, marginBottom: 18 }}>New Bag</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={labelStyle}>Bean / Blend Name</label>
+              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Super Crema" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Roaster</label>
+              <input value={form.roaster} onChange={e => setForm(f => ({ ...f, roaster: e.target.value }))} placeholder="e.g. Lavazza" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Roast Date</label>
+              <input type="date" value={form.roastDate} onChange={e => setForm(f => ({ ...f, roastDate: e.target.value }))} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Date Opened</label>
+              <input type="date" value={form.openedDate} onChange={e => setForm(f => ({ ...f, openedDate: e.target.value }))} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Grind Setting (Virtuoso+)</label>
+              <input type="number" min={1} max={40} value={form.grindSetting} onChange={e => setForm(f => ({ ...f, grindSetting: e.target.value }))} placeholder="e.g. 8" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Notes / Tasting</label>
+              <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="e.g. nutty, chocolatey" style={inputStyle} />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={handleAdd} style={{
+              flex: 1, padding: "12px 0", borderRadius: 8,
+              background: C.primaryGlow, border: `1px solid ${C.primary}`,
+              color: C.primary, fontFamily: C.mono, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer",
+            }}>Save Bag</button>
+            <button onClick={() => setAdding(false)} style={{
+              padding: "12px 20px", borderRadius: 8,
+              background: "transparent", border: `1px solid ${C.border2}`,
+              color: C.muted, fontFamily: C.mono, fontSize: 11, cursor: "pointer",
+            }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Freshness guide */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16, display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ fontFamily: C.mono, fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: "0.12em", alignSelf: "center" }}>Freshness</div>
+        {[
+          [C.primary, "< 4 days", "Too fresh"],
+          [C.primary, "4–21 days", "Peak"],
+          [C.blue, "21–42 days", "Acceptable"],
+          [C.muted, "42+ days", "Past prime"],
+        ].map(([col, range, lbl]) => (
+          <div key={range} style={{ display: "flex", align: "center", gap: 6 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: col, alignSelf: "center" }} />
+            <div style={{ fontFamily: C.mono, fontSize: 10 }}>
+              <span style={{ color: col }}>{lbl}</span>
+              <span style={{ color: C.textDim }}> · {range} post-roast</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Bags list */}
+      {bags.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "50px 0", color: C.border2, fontFamily: C.mono, fontSize: 13 }}>
+          No beans logged yet.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {bags.map(bag => {
+            const daysRoasted = daysSince(bag.roastDate);
+            const daysOpened = daysSince(bag.openedDate);
+            const freshness = bag.roastDate ? freshnessLabel(bag.roastDate, bag.openedDate) : null;
+            const fCol = freshness ? (freshnessColors[freshness.level] || C.muted) : C.muted;
+
+            return (
+              <div key={bag.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
+                <div style={{ padding: "16px 18px", display: "flex", gap: 14, alignItems: "flex-start" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap", marginBottom: 6 }}>
+                      <div style={{ fontFamily: C.mono, fontSize: 14, fontWeight: 500, color: C.text }}>{bag.name}</div>
+                      {bag.roaster && <div style={{ fontFamily: C.mono, fontSize: 10, color: C.textDim }}>{bag.roaster}</div>}
+                      {bag.grindSetting && (
+                        <div style={{ fontFamily: C.mono, fontSize: 10, background: C.primaryGlow, border: `1px solid ${C.primary}`, borderRadius: 4, padding: "2px 8px", color: C.primary }}>
+                          Setting #{bag.grindSetting}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: bag.notes ? 8 : 0 }}>
+                      {bag.roastDate && (
+                        <div>
+                          <div style={{ fontFamily: C.mono, fontSize: 9, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.1em" }}>Roasted</div>
+                          <div style={{ fontFamily: C.mono, fontSize: 11, color: C.text }}>{bag.roastDate} <span style={{ color: C.textDim }}>({daysRoasted}d ago)</span></div>
+                        </div>
+                      )}
+                      {bag.openedDate && (
+                        <div>
+                          <div style={{ fontFamily: C.mono, fontSize: 9, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.1em" }}>Opened</div>
+                          <div style={{ fontFamily: C.mono, fontSize: 11, color: C.text }}>{bag.openedDate} <span style={{ color: C.textDim }}>({daysOpened}d ago)</span></div>
+                        </div>
+                      )}
+                    </div>
+
+                    {bag.notes && <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textDim, fontStyle: "italic", marginTop: 4 }}>{bag.notes}</div>}
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                    {freshness && (
+                      <div style={{ fontFamily: C.mono, fontSize: 10, color: fCol, background: fCol + "18", border: `1px solid ${fCol}44`, borderRadius: 5, padding: "4px 10px", whiteSpace: "nowrap" }}>
+                        {freshness.label}
+                      </div>
+                    )}
+                    <button onClick={() => setBags(p => p.filter(b => b.id !== bag.id))} style={{ background: "none", border: "none", color: C.muted, fontSize: 13, opacity: 0.4, cursor: "pointer" }}>✕</button>
+                  </div>
+                </div>
+
+                {/* Freshness bar */}
+                {bag.roastDate && daysRoasted !== null && (
+                  <div style={{ height: 3, background: C.border }}>
+                    <div style={{
+                      height: "100%",
+                      width: `${Math.min(100, (daysRoasted / 60) * 100)}%`,
+                      background: fCol,
+                      transition: "width 0.4s",
+                    }} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+
+const defaultShot = () => ({ date: new Date().toISOString().split("T")[0], basket: "single", setting: 8, dose: 18, yield: 36, time: 30, taste: 0, notes: "" });
+
+function BambinoCompanion() {
+  const [themeName, setThemeName] = useState(() => {
+    try { return localStorage.getItem("bambino_theme") || "gigi"; } catch { return "gigi"; }
+  });
+  const C = { ...THEMES[themeName] };
+  const isLight = themeName === "juno";
+  useEffect(() => {
+    try { localStorage.setItem("bambino_theme", themeName); } catch {}
+  }, [themeName]);
+
+  const [tab, setTab] = useState("log");
+  const [shots, setShots] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("bambino_shots") || "[]"); } catch { return []; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("bambino_shots", JSON.stringify(shots)); } catch {}
+  }, [shots]);
+  const [form, setForm] = useState(defaultShot());
+  const [checklist, setChecklist] = useState({});
+  const [saved, setSaved] = useState(false);
+
+  const basket = BASKET_TYPES[form.basket];
+  const ratio = form.yield && form.dose ? (form.yield / form.dose).toFixed(1) : "–";
+  const tasteFor = (v) => TASTE_OPTIONS.find(t => t.value === v) || TASTE_OPTIONS[2];
+  const tasteColor = (v) => tasteFor(v).color || C.primary;
+
+  const TABS = [
+    { id: "log",      label: "Log Shot",  accent: () => C.primary },
+    { id: "diagnose", label: "Diagnose",  accent: () => C.blueBright },
+    { id: "workflow", label: "Workflow",  accent: () => C.primary },
+    { id: "beans",    label: "Beans",     accent: () => C.primary },
+    { id: "clean",    label: "Clean",     accent: () => C.purple },
+    { id: "history",  label: "History",   accent: () => C.primary },
+  ];
+
+  const handleSave = () => {
+    setShots(p => [{ ...form, id: Date.now() }, ...p]);
+    setSaved(true);
+    setForm(defaultShot());
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: C.mono, transition: "background 0.3s, color 0.3s" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: ${C.border2}; border-radius: 2px; }
+        button { cursor: pointer; font-family: 'DM Mono', monospace; }
+        input { font-family: 'DM Mono', monospace; color-scheme: ${isLight ? "light" : "dark"}; }
+        .fade { animation: fadeUp 0.22s ease; }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
+      `}</style>
+
+      {/* Header */}
+      <div style={{ borderBottom: `1px solid ${C.border}`, padding: "16px 22px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+        <div style={{ flex: "0 0 auto" }}>
+          <div style={{ fontSize: 20, fontWeight: 500, letterSpacing: "-0.2px" }}>
+            Bambino <span style={{ color: C.primary }}>×</span> Virtuoso
+          </div>
+          <div style={{ fontSize: 9, color: C.textDim, letterSpacing: "0.2em", textTransform: "uppercase", marginTop: 2 }}>
+            Espresso Companion
+          </div>
+        </div>
+
+        {/* Basket toggle */}
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <div style={{ fontSize: 9, color: C.textDim, letterSpacing: "0.1em", textTransform: "uppercase" }}>Basket</div>
+          {Object.values(BASKET_TYPES).map(b => {
+            const col = b.id === "single" ? C.primary : C.blueBright;
+            return (
+              <button key={b.id} onClick={() => setForm(f => ({ ...f, basket: b.id, setting: b.startSetting, dose: b.dose, yield: b.yield, time: b.time }))} style={{
+                padding: "5px 12px", borderRadius: 5,
+                background: form.basket === b.id ? col + "18" : "transparent",
+                border: `1px solid ${form.basket === b.id ? col : C.border2}`,
+                color: form.basket === b.id ? col : C.muted,
+                fontSize: 11, letterSpacing: "0.04em",
+              }}>
+                {b.name}{form.basket === b.id && <span style={{ fontSize: 9, marginLeft: 5, opacity: 0.6 }}>{b.grindRange}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Theme toggle */}
+        <div style={{ display: "flex", gap: 4, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: 3, marginLeft: "auto" }}>
+          {Object.entries(THEMES).map(([key, t]) => (
+            <button key={key} onClick={() => setThemeName(key)} style={{
+              padding: "5px 12px", borderRadius: 5, fontSize: 10, letterSpacing: "0.06em",
+              background: themeName === key ? (key === "juno" ? "#b8720a18" : "#f0edf812") : "transparent",
+              border: `1px solid ${themeName === key ? (key === "juno" ? "#b8720a" : "#f0edf840") : "transparent"}`,
+              color: themeName === key ? (key === "juno" ? "#b8720a" : "#f0edf8") : C.muted,
+            }}>{t.name} {key === "juno" ? "🐕" : "🐈‍⬛"}</button>
+          ))}
+        </div>
+
+        {/* Nav */}
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {TABS.map(t => {
+            const ac = t.accent();
+            return (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{
+                padding: "6px 12px", borderRadius: 5,
+                background: tab === t.id ? ac + "18" : "transparent",
+                border: `1px solid ${tab === t.id ? ac : C.border2}`,
+                color: tab === t.id ? ac : C.muted,
+                fontSize: 10, letterSpacing: "0.07em", textTransform: "uppercase",
+                transition: "all 0.15s",
+              }}>{t.label}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 920, margin: "0 auto", padding: "30px 22px" }}>
+
+        {/* ── LOG SHOT ─────────────────────────────────────────────────────── */}
+        {tab === "log" && (
+          <div className="fade">
+            <div style={{ fontSize: 19, fontWeight: 500, marginBottom: 5, color: C.primary }}>New Shot</div>
+            <div style={{ fontSize: 11, color: C.textDim, marginBottom: 22 }}>
+              {basket.name} ({basket.aka}) · start at {basket.startSetting} · range {basket.grindRange}
+            </div>
+
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "16px 22px", marginBottom: 18, display: "flex" }}>
+              {[
+                { label: "Ratio",        value: `1:${ratio}`,                   big: true },
+                { label: "Dose → Yield", value: `${form.dose}g → ${form.yield}g` },
+                { label: "Time",         value: `${form.time}s` },
+                { label: "Setting",      value: `#${form.setting}` },
+              ].map((item, i) => (
+                <div key={item.label} style={{ flex: 1, textAlign: "center", borderRight: i < 3 ? `1px solid ${C.border}` : "none" }}>
+                  <div style={{ fontSize: item.big ? 36 : 22, fontWeight: 500, color: C.primary, lineHeight: 1 }}>{item.value}</div>
+                  <div style={{ fontSize: 9, color: C.textDim, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.12em" }}>{item.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Grind */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 18, marginBottom: 14 }}>
+              <div style={{ fontSize: 9, color: C.muted, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 14 }}>Virtuoso+ Grind Setting · 40 macro steps</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <button onClick={() => setForm(f => ({ ...f, setting: Math.max(1, f.setting - 1) }))} style={{ width: 34, height: 34, borderRadius: "50%", background: C.bg, border: `1px solid ${C.border2}`, color: C.textMid, fontSize: 18 }}>−</button>
+                  <div style={{ textAlign: "center", minWidth: 60 }}>
+                    <div style={{
+                      fontSize: 50, fontWeight: 500, lineHeight: 1, transition: "color 0.2s",
+                      color: form.setting <= 9 ? C.primary : form.setting <= 14 ? C.blueBright : C.muted,
+                    }}>{form.setting}</div>
+                    <div style={{ fontSize: 9, color: C.textDim, marginTop: 2 }}>/ 40</div>
+                  </div>
+                  <button onClick={() => setForm(f => ({ ...f, setting: Math.min(40, f.setting + 1) }))} style={{ width: 34, height: 34, borderRadius: "50%", background: C.bg, border: `1px solid ${C.border2}`, color: C.textMid, fontSize: 18 }}>+</button>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ position: "relative", height: 5, background: C.border2, borderRadius: 3, marginBottom: 10 }}>
+                    <div style={{
+                      position: "absolute", left: 0, height: "100%", borderRadius: 3,
+                      width: `${((form.setting - 1) / 39) * 100}%`,
+                      background: form.setting <= 9 ? C.primary : form.setting <= 14 ? C.blueBright : C.muted,
+                      transition: "width 0.2s, background 0.2s",
+                    }} />
+                    <div style={{ position: "absolute", left: `${((form.setting - 1) / 39) * 100}%`, top: "50%", transform: "translate(-50%,-50%)", width: 10, height: 10, borderRadius: "50%", background: C.text, border: `2px solid ${C.bg}`, transition: "left 0.2s" }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {[["1–9","single wall",C.primary],["10–14","dual wall",C.blueBright],["15–25","drip / aero",C.muted],["25+","french press",C.dim]].map(([r,l,col]) => (
+                      <div key={r} style={{ flex: 1 }}>
+                        <div style={{ fontSize: 10, color: col, fontWeight: 500 }}>{r}</div>
+                        <div style={{ fontSize: 9, color: C.textDim }}>{l}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
+              {[
+                { key: "dose",  label: "Dose (g)",  hint: "17–20g",  min: 14, max: 22, step: 0.5 },
+                { key: "yield", label: "Yield (g)",  hint: "34–40g", min: 20, max: 60, step: 0.5 },
+                { key: "time",  label: "Time (s)",   hint: "25–35s", min: 10, max: 60, step: 1   },
+              ].map(({ key, label, hint, min, max, step }) => (
+                <div key={key} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, padding: "13px 16px" }}>
+                  <div style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 5 }}>{label}</div>
+                  <input type="number" min={min} max={max} step={step} value={form[key]}
+                    onChange={e => setForm(f => ({ ...f, [key]: parseFloat(e.target.value) || 0 }))}
+                    style={{ background: "transparent", border: "none", outline: "none", fontSize: 30, color: C.text, fontWeight: 500, width: "100%" }}
+                  />
+                  <div style={{ fontSize: 9, color: C.dim }}>{hint}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 18, marginBottom: 14 }}>
+              <div style={{ fontSize: 9, color: C.muted, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 12 }}>Taste</div>
+              <div style={{ display: "flex", gap: 7, marginBottom: 12 }}>
+                {TASTE_OPTIONS.map(t => {
+                  const col = t.color || C.primary;
+                  return (
+                    <button key={t.value} onClick={() => setForm(f => ({ ...f, taste: t.value }))} style={{
+                      flex: 1, padding: "9px 5px", borderRadius: 8,
+                      background: form.taste === t.value ? col + "18" : C.bg,
+                      border: `1px solid ${form.taste === t.value ? col : C.border}`,
+                      color: form.taste === t.value ? col : C.muted, fontSize: 11, textAlign: "center",
+                    }}>
+                      <div style={{ fontSize: 17, marginBottom: 3 }}>{t.emoji}</div>
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {form.taste !== undefined && (
+                <div style={{ background: C.bg, borderRadius: 8, padding: 13, borderLeft: `3px solid ${tasteColor(form.taste)}` }}>
+                  <div style={{ fontSize: 11, color: C.textMid, lineHeight: 1.7 }}>{ADJUSTMENT_TIPS[String(form.taste)]}</div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, padding: "13px 16px", marginBottom: 18 }}>
+              <div style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 5 }}>Notes</div>
+              <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Flow, crema, basket, anything worth logging…"
+                style={{ background: "transparent", border: "none", outline: "none", fontSize: 13, color: C.text, width: "100%" }}
+              />
+            </div>
+
+            <button onClick={handleSave} style={{
+              width: "100%", padding: 14, borderRadius: 9,
+              background: saved ? C.primary + "22" : C.primaryGlow,
+              border: `1px solid ${saved ? C.primary : C.primary + "55"}`,
+              color: C.primary, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", transition: "all 0.3s",
+            }}>{saved ? "✓ Shot Logged" : "Log Shot"}</button>
+          </div>
+        )}
+
+        {/* ── DIAGNOSE ──────────────────────────────────────────────────────── */}
+        {tab === "diagnose" && (
+          <div className="fade">
+            <div style={{ fontSize: 19, fontWeight: 500, marginBottom: 5, color: C.blueBright }}>Shot Diagnostics</div>
+            <div style={{ fontSize: 11, color: C.textDim, marginBottom: 26 }}>Read your puck and your stock portafilter — then fix the root cause</div>
+            <DiagnosePanel C={C} />
+          </div>
+        )}
+
+        {/* ── WORKFLOW ──────────────────────────────────────────────────────── */}
+        {tab === "workflow" && (
+          <div className="fade">
+            <div style={{ fontSize: 19, fontWeight: 500, marginBottom: 5, color: C.primary }}>Shot Workflow</div>
+            <div style={{ fontSize: 11, color: C.textDim, marginBottom: 26 }}>Bambino + Virtuoso+ + Normcore spring tamper + Subminimal Flick</div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 22 }}>
+              {WORKFLOW.map((step, i) => {
+                const done = checklist[step.id];
+                return (
+                  <div key={step.id} onClick={() => setChecklist(c => ({ ...c, [step.id]: !c[step.id] }))} style={{
+                    background: done ? C.primary + "0c" : C.surface,
+                    border: `1px solid ${done ? C.primary + "44" : C.border}`,
+                    borderRadius: 10, padding: "14px 17px",
+                    display: "flex", gap: 13, alignItems: "flex-start", cursor: "pointer", transition: "border-color 0.15s",
+                  }}>
+                    <div style={{
+                      width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+                      background: done ? C.primary : "transparent",
+                      border: `2px solid ${done ? C.primary : C.border2}`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: done ? C.bg : C.muted, fontSize: done ? 12 : 10, fontWeight: 500,
+                    }}>{done ? "✓" : i + 1}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontSize: 13 }}>{step.icon}</span>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: done ? C.primary : C.text }}>{step.title}</div>
+                      </div>
+                      <div style={{ fontSize: 11, color: C.textDim, lineHeight: 1.7, marginBottom: 4 }}>{step.detail}</div>
+                      <div style={{ fontSize: 10, color: C.blueBright }}>↳ {step.tip}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 18 }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: C.primary, marginBottom: 14 }}>Starting Parameters</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  ["Single wall","Setting 8 · 18g → 36g · 30s"],
+                  ["Dual wall","Setting 12 · 18g → 36g · 25s"],
+                  ["First drip","7–9s from pump start"],
+                  ["Flick WDT","15–20s · circles + radial"],
+                  ["Tamp","Spring click = done"],
+                  ["Group flush","2–3s blank before every shot"],
+                ].map(([k, v]) => (
+                  <div key={k} style={{ borderBottom: `1px solid ${C.border}`, paddingBottom: 8 }}>
+                    <div style={{ fontSize: 9, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.1em" }}>{k}</div>
+                    <div style={{ fontSize: 12, color: C.text, marginTop: 2 }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => setChecklist({})} style={{ marginTop: 14, padding: "7px 14px", background: "transparent", border: `1px solid ${C.border2}`, borderRadius: 5, color: C.muted, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                Reset Checklist
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── BEANS ────────────────────────────────────────────────────────── */}
+        {tab === "beans" && (
+          <div className="fade">
+            <div style={{ fontSize: 19, fontWeight: 500, marginBottom: 5, color: C.primary }}>Beans</div>
+            <div style={{ fontSize: 11, color: C.textDim, marginBottom: 26 }}>Track what's open, when it was roasted, and how fresh it is</div>
+            <BeansPanel C={C} />
+          </div>
+        )}
+
+        {/* ── CLEAN ────────────────────────────────────────────────────────── */}
+        {tab === "clean" && (
+          <div className="fade">
+            <div style={{ fontSize: 19, fontWeight: 500, marginBottom: 5, color: C.purple }}>Cleaning Guide</div>
+            <div style={{ fontSize: 11, color: C.textDim, marginBottom: 26 }}>Bambino · Blind basket · Puly Caff · Grinder brushing</div>
+            <CleaningPanel C={C} />
+          </div>
+        )}
+
+        {/* ── HISTORY ──────────────────────────────────────────────────────── */}
+        {tab === "history" && (
+          <div className="fade">
+            <div style={{ fontSize: 19, fontWeight: 500, marginBottom: 5, color: C.primary }}>Shot History</div>
+            <div style={{ fontSize: 11, color: C.textDim, marginBottom: 26 }}>{shots.length} shot{shots.length !== 1 ? "s" : ""} logged</div>
+
+            {shots.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "60px 0", color: C.border2, fontFamily: C.mono, fontSize: 13 }}>
+                No shots yet.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {shots.map(shot => {
+                  const taste = tasteFor(shot.taste);
+                  const tCol = taste.color || C.primary;
+                  const r = (shot.yield / shot.dose).toFixed(1);
+                  const b = BASKET_TYPES[shot.basket];
+                  const bCol = shot.basket === "single" ? C.primary : C.blueBright;
+                  return (
+                    <div key={shot.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "13px 17px", display: "flex", gap: 13, alignItems: "center" }}>
+                      <div style={{ width: 34, height: 34, borderRadius: "50%", background: bCol + "18", border: `2px solid ${bCol}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <div style={{ fontSize: 10, color: bCol, fontWeight: 500 }}>#{shot.setting}</div>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", gap: 9, alignItems: "center", marginBottom: 5, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 9, color: C.textDim }}>{shot.date}</span>
+                          <span style={{ fontSize: 10, color: tCol }}>{taste.emoji} {taste.label}</span>
+                          <span style={{ fontSize: 9, color: C.muted }}>{b.name}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 18 }}>
+                          {[[`${shot.dose}g→${shot.yield}g`,"dose/yield"],[`1:${r}`,"ratio"],[`${shot.time}s`,"time"]].map(([val, lbl]) => (
+                            <div key={lbl}>
+                              <div style={{ fontSize: 14, color: C.text, fontWeight: 500 }}>{val}</div>
+                              <div style={{ fontSize: 9, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.1em" }}>{lbl}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {shot.notes && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{shot.notes}</div>}
+                      </div>
+                      <button onClick={() => setShots(p => p.filter(s => s.id !== shot.id))} style={{ background: "none", border: "none", color: C.muted, fontSize: 13, opacity: 0.35, cursor: "pointer" }}>✕</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<BambinoCompanion />);
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js');
+      });
+    }
+  </script>
+</body>
+</html>
